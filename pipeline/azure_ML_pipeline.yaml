@@ -1,0 +1,40 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+description: Signature detection fine-tuning pipeline
+
+jobs:
+  prepare_data:
+    type: command
+    code: ./src
+    command: >-
+      python prepare_data.py
+    environment: azureml:AzureML-pytorch-1.13-ubuntu20.04-py38-cuda11.6-gpu@latest
+    outputs:
+      processed_data: {type: uri_folder}
+
+  train_model:
+    type: command
+    code: ./src
+    command: >-
+      python train_resnet50.py --data ${{inputs.data}}
+    environment: azureml:AzureML-pytorch-1.13-ubuntu20.04-py38-cuda11.6-gpu@latest
+    inputs:
+      data: ${{parent.jobs.prepare_data.outputs.processed_data}}
+    outputs:
+      model_output: {type: uri_folder}
+
+  register_model:
+    type: command
+    code: ./src
+    command: >-
+      python register_model.py --model_path ${{inputs.model}}
+    environment: azureml:AzureML-pytorch-1.13-ubuntu20.04-py38-cuda11.6-gpu@latest
+    inputs:
+      model: ${{parent.jobs.train_model.outputs.model_output}}
+
+  deploy_model:
+    type: command
+    code: ./src
+    command: >-
+      python deploy_model.py --model_name signature-resnet50
+    environment: azureml:AzureML-pytorch-1.13-ubuntu20.04-py38-cuda11.6-gpu@latest
